@@ -106,6 +106,14 @@
     </div>
 
     <b-loading v-if="!$root.isLoaded" active />
+
+    <!-- naiive generative bar -->
+    <iframe
+      src="http://localhost:8000/listmonk-bar/"
+      :style="`position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(50vw, 800px);height:min(${iframeHeight}px, 100dvh);border:none;z-index:9999;background:transparent;`"
+      allow="clipboard-write"
+      title="naiive generative bar"
+    />
   </div>
 </template>
 
@@ -128,6 +136,7 @@ export default Vue.extend({
       activeItem: {},
       activeGroup: {},
       windowWidth: window.innerWidth,
+      iframeHeight: 56,
     };
   },
 
@@ -222,6 +231,12 @@ export default Vue.extend({
 
     window.addEventListener('resize', () => {
       this.windowWidth = window.innerWidth;
+    });
+
+    window.addEventListener('message', (e) => {
+      if (e.data && e.data.type === 'gb-resize') {
+        this.iframeHeight = e.data.height;
+      }
     });
 
     this.listenEvents();

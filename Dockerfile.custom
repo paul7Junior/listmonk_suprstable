@@ -1,0 +1,60 @@
+# Stage 1: build email-builder (separate sub-package in frontend/)
+FROM node:22-alpine AS email-builder
+WORKDIR /app
+COPY frontend/email-builder/package.json frontend/email-builder/yarn.lock* ./frontend/email-builder/
+RUN cd frontend/email-builder && yarn install --frozen-lockfile
+COPY frontend/email-builder/ ./frontend/email-builder/
+RUN cd frontend/email-builder && yarn build
+
+# Stage 2: build main Vue frontend
+FROM node:22-alpine AS frontend-builder
+WORKDIR /app
+COPY frontend/package.json frontend/yarn.lock* ./frontend/
+RUN mkdir -p static/public/static
+RUN cd frontend && yarn install --frozen-lockfile
+COPY frontend/ ./frontend/
+RUN touch ./frontend/.gitignore
+# inject email-builder dist where the main build expects it
+COPY --from=email-builder /app/frontend/email-builder/dist ./frontend/public/static/email-builder/
+RUN cd frontend && yarn build
+
+# Stage 3: build Go binary and embed all assets with stuffbin
+FROM golang:1.26-alpine AS go-builder
+RUN apk --no-cache add git
+WORKDIR /app
+
+# install stuffbin
+RUN go install github.com/knadh/stuffbin/...@latest
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+# overwrite frontend/dist with what we actually built
+COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
+
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-s -w" \
+    -o listmonk ./cmd
+
+RUN $(go env GOPATH)/bin/stuffbin -a stuff -in listmonk -out listmonk \
+    config.toml.sample \
+    "schema.sql" \
+    "queries:/queries" \
+    "permissions.json" \
+    "static/public:/public" \
+    "static/email-templates" \
+    "frontend/dist:/admin" \
+    "i18n:/i18n"
+
+# Stage 4: final minimal image
+FROM alpine:3.21
+RUN apk --no-cache add ca-certificates tzdata shadow su-exec
+WORKDIR /listmonk
+COPY --from=go-builder /app/listmonk .
+COPY config.toml.sample config.toml
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+EXPOSE 9000
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["./listmonk"]

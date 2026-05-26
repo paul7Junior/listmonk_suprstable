@@ -1,5 +1,8 @@
 <template>
   <section class="dashboard content">
+    <div style="background:#1a1a2e;color:#e0e0ff;padding:8px 16px;border-radius:4px;margin-bottom:12px;font-size:0.85rem;">
+      🚀 naiive edition
+    </div>
     <header class="columns">
       <div class="column is-two-thirds">
         <h1 class="title is-5">
@@ -145,6 +148,7 @@
         </a>
       </p>
     </section>
+
   </section>
 </template>
 
